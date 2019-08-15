@@ -20,7 +20,7 @@ struct Node {
     struct Node *next_entry;
 };
 
-/* Data structure for the hash table with the size and a double pointer to the items. */
+/* Data structure for the hash table with the size and an array of pointers of type Node. */
 struct HT_dictionary {
     uint64_t dict_size;
     struct Node **dict_items;
@@ -139,8 +139,8 @@ uint64_t read_wb_line(const char *argv) {
     }
 
     // Allocate some memory for an array to put the chars in.
-    size_t size_word = 1;
-    size_t size_translation = 1;
+    size_t size_word = 1024;
+    size_t size_translation = 1024;
     char *str_word = calloc(size_word, 1);
     char *str_translation = calloc(size_translation, 1);
 
@@ -427,7 +427,7 @@ char *search_in_ht_dictionary(const char *word) {
 int read_from_stdin(void) {
 
     // Allocate some memory for an array to put the chars in.
-    size_t size_search_pattern = 1;
+    size_t size_search_pattern = 1024;
     char *search_pattern = calloc(size_search_pattern, 1);
 
     // Break if memory allocation fails.
