@@ -36,14 +36,11 @@ void delete_node(void);
 bool prepend_to_linked_list(const char *, const char *);
 uint64_t read_wb_line(const char *);
 
-/*
- * Function prototypes for the dictionary hash table.
- * Hash table based on https://github.com/jamesroutley/write-a-hash-table
- */
+/* Function prototypes for the dictionary hash table. */
 struct HT_dictionary *create_new_ht_dictionary(uint64_t);
 void delete_ht_dictionary(void);
 void delete_ht_dictionary_item(struct Node *);
-uint64_t djb2_hash(const char *, uint64_t, uint64_t);
+uint64_t djb2a_hash(const char *, uint64_t, uint64_t);
 uint64_t find_next_prime(uint64_t);
 bool is_prime(uint64_t);
 void insert_linked_list_node_to_ht_dictionary(void);
@@ -318,18 +315,13 @@ void delete_ht_dictionary_item(struct Node *item) {
     free(item);
 }
 
-// DJB2 hash function for strings. More info:
-// http://www.cse.yorku.ca/~oz/hash.html
-// https://groups.google.com/forum/#!msg/comp.lang.c/lSKWXiuNOAk/zstZ3SRhCjgJ
-// https://softwareengineering.stackexchange.com/questions/49550/which-hashing-algorithm-is-best-for-uniqueness-and-speed
-// https://stackoverflow.com/questions/7666509/hash-function-for-string?rq=1
-uint64_t djb2_hash(const char *word, uint64_t size, uint64_t collisions) {
+// DJB2 hash function for strings.
+uint64_t djb2a_hash(const char *word, uint64_t size, uint64_t collisions) {
     uint64_t hash = 5381;
     uint8_t c;
 
     while ((c = *word++))
-        hash = ((hash << 5u) + hash) + c; // hash * 33 + c
-    // https://stackoverflow.com/questions/50399090/use-of-a-signed-integer-operand-with-a-binary-bitwise-operator-when-using-un
+        hash = ((hash << 5u) ^ hash) + c; // hash * 33 XOR c
 
     return (hash + collisions) % size;
 }
@@ -387,7 +379,7 @@ void insert_linked_list_node_to_ht_dictionary(void) {
 // Insert a new word-translation-pair in the dictionary.
 void insert_to_ht_dictionary(struct Node *item) {
     // Calculate the hash a.k.a. where to store the node (the bucket).
-    uint64_t index = djb2_hash(item->word, dictionary->dict_size, 0);
+    uint64_t index = djb2a_hash(item->word, dictionary->dict_size, 0);
     // Set a pointer to that bucket.
     struct Node *cur_item = dictionary->dict_items[index];
 
@@ -395,7 +387,7 @@ void insert_to_ht_dictionary(struct Node *item) {
     // Try to put the item in. If some other item is already there, recalculate the hash to deal
     // with the collision.
     while (cur_item != NULL) {
-        index = djb2_hash(item->word, dictionary->dict_size, collisions);
+        index = djb2a_hash(item->word, dictionary->dict_size, collisions);
         cur_item = dictionary->dict_items[index];
         collisions++;
     }
@@ -408,14 +400,14 @@ void insert_to_ht_dictionary(struct Node *item) {
 // Calculate the hash and check if the word matches. If not, try again until a match or an emtpy bucket.
 char *search_in_ht_dictionary(const char *word) {
     uint64_t collisions = 1;
-    uint64_t index = djb2_hash(word, dictionary->dict_size, 0);
+    uint64_t index = djb2a_hash(word, dictionary->dict_size, 0);
     struct Node *item = dictionary->dict_items[index];
 
     while (item != NULL) {
         if (strcmp(item->word, word) == 0)
             return item->translation;
 
-        index = djb2_hash(word, dictionary->dict_size, collisions);
+        index = djb2a_hash(word, dictionary->dict_size, collisions);
         item = dictionary->dict_items[index];
         collisions++;
     }
