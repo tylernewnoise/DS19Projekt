@@ -147,6 +147,8 @@ uint64_t read_wb_line(const unsigned char *argv) {
         fclose(file_pointer);
         exit(2);
     }
+    str_word[0] = '\0';
+    str_translation[0] = '\0';
 
     int c = getc(file_pointer);     // Char to read.
     uint64_t index_word = 0;        // Index for the word we read.
