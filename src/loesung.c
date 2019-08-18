@@ -420,12 +420,14 @@ unsigned char *search_in_ht_dictionary(const unsigned char *word) {
 /* Functions for reading from standard input. A lot of this comes from Benni. */
 int read_from_stdin(void) {
 
-    // Allocate some memory for an array to put the chars in.
+    // Allocate some memory for two arrays to put the chars in. The second array is just a copy. We need this if we
+    // want to flip chars from upper to lowercase.
     size_t size_search_pattern = 1024;
     unsigned char *search_pattern = malloc(size_search_pattern);
+    unsigned char *search_pattern_cpy = malloc(size_search_pattern);
 
     // Break if memory allocation fails.
-    if (search_pattern == NULL) {
+    if (search_pattern == NULL || search_pattern_cpy == NULL) {
         fprintf(stderr, "Error: could not start to read form stdin - out of memory!\n");
         delete_ht_dictionary();
         exit(2);
@@ -444,9 +446,12 @@ int read_from_stdin(void) {
     // To read nothing is a valid input, so we can exit here.
     if (c == EOF) {
         free(search_pattern);
+        free(search_pattern_cpy);
 
         // But check if the file was really empty or was it some strange character?
         if (feof(stdin) == 0) {
+            free(search_pattern);
+            free(search_pattern_cpy);
             delete_ht_dictionary();
             fprintf(stderr, "Error: wrong input format due to non valid character!\n");
             exit(2);
@@ -464,23 +469,35 @@ int read_from_stdin(void) {
                 break;
         }
 
-        // Resize the array if the input becomes to big by factor two.
+        // Resize the arrays if the input becomes too big by factor two.
         if (len == size_search_pattern) {
             unsigned char *tmp = realloc(search_pattern, size_search_pattern *= 2);
             // Break if reallocation fails.
             if (!tmp) {
                 fprintf(stderr, "Error: could not read form stdin - out of memory!\n");
                 free(search_pattern);
+                free(search_pattern_cpy);
                 delete_ht_dictionary();
                 exit(2);
             } else
                 search_pattern = tmp;
+
+            tmp = realloc(search_pattern_cpy, size_search_pattern);
+            if (!tmp) {
+                fprintf(stderr, "Error: could not read form stdin - out of memory!\n");
+                free(search_pattern);
+                free(search_pattern_cpy);
+                delete_ht_dictionary();
+                exit(2);
+            } else
+                search_pattern_cpy = tmp;
         }
 
         if (is_letter(c)) {
             word_started = true;
             // Add character to search pattern. c is in ASCII format, so casting is fine here.
-            search_pattern[len++] = (char) c;
+            search_pattern[len] = (char) c;
+            search_pattern_cpy[len++] = (char) c;
         } else {
             // Character is not a letter, hence the reading of the search pattern has finished or
             // we read a valid char, but it is not a letter (delimiter).
@@ -488,65 +505,44 @@ int read_from_stdin(void) {
                 // A word of only letters has been read.
                 // Make it a zero terminated string then.
                 search_pattern[len] = '\0';
+                search_pattern_cpy[len] = '\0';
 
                 // Check if first char is capitalized.
                 if (is_uppercase(search_pattern[0]))
                     word_starts_uppercase = true;
 
-                // Make a copy of the search pattern string to turn it to small letters.
-                unsigned char *lookup_copy = malloc(strlen((const char *) search_pattern) + 1);
-                if (lookup_copy == NULL) {
-                    fprintf(stderr, "Error: could not start to read form stdin - out of memory!\n");
-                    free(search_pattern);
-                    delete_ht_dictionary();
-                    exit(2);
-                }
-                memcpy(lookup_copy, search_pattern, strlen((const char *) search_pattern) + 1);
 
                 // Make chars lowercase.
-                for (size_t i = 0; lookup_copy[i] != '\0'; i++)
-                        lookup_copy[i] = lookup_copy[i] | 32u;
+                for (size_t i = 0; search_pattern_cpy[i] != '\0'; i++)
+                        search_pattern_cpy[i] = search_pattern_cpy[i] | 32u;
 
                 // Create a pointer to our translation.
-                unsigned char *tmp = search_in_ht_dictionary(lookup_copy);
+                unsigned char *translation = search_in_ht_dictionary(search_pattern_cpy);
 
                 // Print the original search pattern if it is not found in the dictionary and set
                 // the return value to 1.
-                if (tmp == NULL) {
+                if (translation == NULL) {
                     fprintf(stdout, "<%s>", search_pattern);
                     ret = 1;
                 } else {
                     // If the search pattern is found and a translation returned we maybe need to
                     // capitalize the first letter for output.
                     if (word_starts_uppercase) {
-                        // Make a copy of the translation returned from the dictionary.
-                        // This is necessary because we have to change the first letter and don't want
-                        // to change it in the dictionary, too.
-                        unsigned char *translation = malloc(strlen((const char *) tmp) + 1);
-                        if (translation == NULL) {
-                            fprintf(stderr, "Error: could not start to read form stdin - out of memory!\n");
-                            free(lookup_copy);
-                            free(search_pattern);
-                            delete_ht_dictionary();
-                            exit(2);
-                        }
-                        memcpy(translation, tmp, strlen((const char *) tmp) + 1);
-
                         // Make the first letter uppercase.
                         translation[0] = translation[0] & ~32u;
 
-                        // Print the capitalized translation.
+                        // Print the capitalized translation....
                         fprintf(stdout, "%s", translation);
-                        free(translation);
+                        // ... and switch back to lowercase.
+                        translation[0] = translation[0] | 32u;
                     } else
                         // Print the lowercase translation.
-                        fprintf(stdout, "%s", tmp);
+                        fprintf(stdout, "%s", translation);
                 }
 
-                // Clear memory for the search pattern copy.
-                free(lookup_copy);
-                // Reset the read-in array to zeros.
+                // "Reset" the read-in array to zeros.
                 search_pattern[0] = '\0';
+                search_pattern_cpy[0] = '\0';
 
                 // Reset word variables.
                 len = 0;
@@ -574,11 +570,13 @@ int read_from_stdin(void) {
     if (feof(stdin) == 0) {
         fprintf(stderr, "Error: wrong input format due to non valid character!\n");
         free(search_pattern);
+        free(search_pattern_cpy);
         delete_ht_dictionary();
         exit(2);
     }
 
     free(search_pattern);
+    free(search_pattern_cpy);
     return ret;
 }
 
