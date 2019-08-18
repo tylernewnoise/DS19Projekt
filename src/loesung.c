@@ -2,7 +2,7 @@
 #include <stdbool.h>    // bool
 #include <stdint.h>     // uint64_t, uint8_t
 #include <stdlib.h>     // calloc, malloc, realloc, free
-#include <string.h>     // memcpy, memset, strcmp, strlen
+#include <string.h>     // memcpy, strcmp, strlen
 
 /**
  * Basic Idea:
@@ -15,8 +15,8 @@
 
 /* Data structure for the linked list and the dictionary. The node contains strings and a pointer to the next node. */
 struct Node {
-    char *word;
-    char *translation;
+    unsigned char *word;
+    unsigned char *translation;
     struct Node *next_entry;
 };
 
@@ -33,22 +33,22 @@ struct HT_dictionary *dictionary = NULL;
 /* Function prototypes for the linked list. */
 void delete_linked_list(void);
 void delete_node(void);
-bool prepend_to_linked_list(const char *, const char *);
-uint64_t read_wb_line(const char *);
+bool prepend_to_linked_list(const unsigned char *, const unsigned char *);
+uint64_t read_wb_line(const unsigned char *);
 
 /* Function prototypes for the dictionary hash table. */
 struct HT_dictionary *create_new_ht_dictionary(uint64_t);
 void delete_ht_dictionary(void);
 void delete_ht_dictionary_item(struct Node *);
-uint64_t djb2a_hash(const char *, uint64_t, uint64_t);
+uint64_t djb2_hash(const unsigned char *, uint64_t);
 uint64_t find_next_prime(uint64_t);
 bool is_prime(uint64_t);
 void insert_linked_list_node_to_ht_dictionary(void);
 void insert_to_ht_dictionary(struct Node *);
-char *search_in_ht_dictionary(const char *);
+unsigned char *search_in_ht_dictionary(const unsigned char *);
 
 /* Function prototypes for read from stdin. */
-bool is_capital(int);
+bool is_uppercase(int);
 bool is_letter(int);
 int read_from_stdin(void);
 
@@ -61,11 +61,11 @@ int main(int argc, char *argv[]) {
     }
     int ret = 0;
     // Read wb.file to linked list.
-    uint64_t dict_size = read_wb_line(argv[1]);
+    uint64_t dict_size = read_wb_line((const unsigned char *) argv[1]);
 
     // Create hashtable of desired size. The size is 1.5 times bigger up to the next prime.
     // For example: if the file contains 1000 lines, then the size is find_next_prime(1000 + 500) = 1511.
-    dictionary = create_new_ht_dictionary(find_next_prime(dict_size + dict_size / 2));
+    dictionary = create_new_ht_dictionary(find_next_prime(dict_size + dict_size));
 
     // Write all entries of linked list to hashtable.
     insert_linked_list_node_to_ht_dictionary();
@@ -104,11 +104,11 @@ void delete_node(void) {
 }
 
 /* Insert a new node to the linked list at the beginning of the list. */
-bool prepend_to_linked_list(const char *word, const char *translation) {
+bool prepend_to_linked_list(const unsigned char *word, const unsigned char *translation) {
     // Allocate memory for the node and the strings to insert the node to the linked list.
     struct Node *new_node = malloc(sizeof(struct Node));
-    char *tmp_word = malloc(strlen(word) + 1);
-    char *tmp_translation = malloc(strlen(translation) + 1);
+    unsigned char *tmp_word = malloc(strlen((char *) word) + 1);
+    unsigned char *tmp_translation = malloc(strlen((char *) translation) + 1);
 
     // If malloc() fucks up, return. We don't exit here, because we want to free() our allocated line and close() the
     // open file pointer.
@@ -116,8 +116,8 @@ bool prepend_to_linked_list(const char *word, const char *translation) {
         return false;
 
     // Add the data to the new node.
-    memcpy(tmp_word, word, strlen(word) + 1);
-    memcpy(tmp_translation, translation, strlen(translation) + 1);
+    memcpy(tmp_word, word, strlen((char *) word) + 1);
+    memcpy(tmp_translation, translation, strlen((char *) translation) + 1);
     new_node->word = tmp_word;
     new_node->translation = tmp_translation;
     new_node->next_entry = first_entry;
@@ -126,11 +126,11 @@ bool prepend_to_linked_list(const char *word, const char *translation) {
 }
 
 /* Read the wb.file and insert its content to the linked list. */
-uint64_t read_wb_line(const char *argv) {
+uint64_t read_wb_line(const unsigned char *argv) {
     FILE *file_pointer;
 
     // Open file in read-only-mode.
-    if ((file_pointer = fopen(argv, "r")) == NULL) {
+    if ((file_pointer = fopen((const char *) argv, "r")) == NULL) {
         fprintf(stderr, "Error opening file %s!\n", argv);
         exit(2);
     }
@@ -138,8 +138,8 @@ uint64_t read_wb_line(const char *argv) {
     // Allocate some memory for an array to put the chars in.
     size_t size_word = 1024;
     size_t size_translation = 1024;
-    char *str_word = calloc(size_word, 1);
-    char *str_translation = calloc(size_translation, 1);
+    unsigned char *str_word = malloc(size_word);
+    unsigned char *str_translation = malloc(size_translation);
 
     // Break if memory allocation fails.
     if (str_word == NULL || str_translation == NULL) {
@@ -167,7 +167,7 @@ uint64_t read_wb_line(const char *argv) {
 
         // Reallocate if the char array for the word gets too big.
         if (!is_colon && index_word + 1 == size_word) {
-            char *tmp = realloc(str_word, size_word *= 2);
+            unsigned char *tmp = realloc(str_word, size_word *= 2);
             if (!tmp) {
                 fprintf(stderr, "Error: could not read wb-file - out of memory!\n");
                 free(str_word);
@@ -180,7 +180,7 @@ uint64_t read_wb_line(const char *argv) {
         }
         // Reallocate if the char array for the translation gets too big.
         if (is_colon && index_translation + 1 == size_translation) {
-            char *tmp = realloc(str_translation, size_translation *= 2);
+            unsigned char *tmp = realloc(str_translation, size_translation *= 2);
             if (!tmp) {
                 fprintf(stderr, "Error: could not read wb-file - out of memory!\n");
                 free(str_word);
@@ -217,9 +217,9 @@ uint64_t read_wb_line(const char *argv) {
                 exit(2);
             }
 
-            // Set everything to zero.
-            memset(str_word, '\0', size_word);
-            memset(str_translation, '\0', size_translation);
+            // Set everything "back" to zero.
+            str_word[0] = '\0';
+            str_translation[0] = '\0';
             is_colon = false;
             index_word = index_translation = 0;
             wb_lines++;
@@ -315,15 +315,15 @@ void delete_ht_dictionary_item(struct Node *item) {
     free(item);
 }
 
-// DJB2 hash function for strings.
-uint64_t djb2a_hash(const char *word, uint64_t size, uint64_t collisions) {
+/* DJB2 hash function for strings. */
+uint64_t djb2_hash(const unsigned char *word, uint64_t collisions) {
     uint64_t hash = 5381;
     uint8_t c;
 
     while ((c = *word++))
-        hash = ((hash << 5u) ^ hash) + c; // hash * 33 XOR c
+        hash = ((hash << 5u) * hash) + c; // hash * 33 + c
 
-    return (hash + collisions) % size;
+    return (hash + collisions) % dictionary->dict_size;
 }
 
 /* Helpers to make the dictionary size prime. */
@@ -351,9 +351,9 @@ bool is_prime(uint64_t n) {
     return true;
 }
 
-// Insert node in the dictionary. After all word-translation-pairs are in the dictionary the linked list
-// is empty because all the nodes are now dictionary items and hence stored in the hash table.
-// Also perform a duplicate check for the dictionary.
+/* Insert node in the dictionary. After all word-translation-pairs are in the dictionary the linked list
+ * is empty because all the nodes are now dictionary items and hence stored in the hash table.
+ * Also perform a duplicate check for the dictionary. */
 void insert_linked_list_node_to_ht_dictionary(void) {
 
     while (first_entry != NULL) {
@@ -376,10 +376,10 @@ void insert_linked_list_node_to_ht_dictionary(void) {
     }
 }
 
-// Insert a new word-translation-pair in the dictionary.
+/* Insert a new word-translation-pair in the dictionary. */
 void insert_to_ht_dictionary(struct Node *item) {
     // Calculate the hash a.k.a. where to store the node (the bucket).
-    uint64_t index = djb2a_hash(item->word, dictionary->dict_size, 0);
+    uint64_t index = djb2_hash(item->word, 0);
     // Set a pointer to that bucket.
     struct Node *cur_item = dictionary->dict_items[index];
 
@@ -387,7 +387,7 @@ void insert_to_ht_dictionary(struct Node *item) {
     // Try to put the item in. If some other item is already there, recalculate the hash to deal
     // with the collision.
     while (cur_item != NULL) {
-        index = djb2a_hash(item->word, dictionary->dict_size, collisions);
+        index = djb2_hash(item->word, collisions);
         cur_item = dictionary->dict_items[index];
         collisions++;
     }
@@ -396,18 +396,18 @@ void insert_to_ht_dictionary(struct Node *item) {
     dictionary->dict_items[index] = item;
 }
 
-// Search for a word in the dictionary. This is almost the same as inserting:
-// Calculate the hash and check if the word matches. If not, try again until a match or an emtpy bucket.
-char *search_in_ht_dictionary(const char *word) {
+/* Search for a word in the dictionary. This is almost the same as inserting:
+ * Calculate the hash and check if the word matches. If not, try again until a match or an emtpy bucket. */
+unsigned char *search_in_ht_dictionary(const unsigned char *word) {
     uint64_t collisions = 1;
-    uint64_t index = djb2a_hash(word, dictionary->dict_size, 0);
+    uint64_t index = djb2_hash(word, 0);
     struct Node *item = dictionary->dict_items[index];
 
     while (item != NULL) {
-        if (strcmp(item->word, word) == 0)
+        if (strcmp((const char *) item->word, (const char *) word) == 0)
             return item->translation;
 
-        index = djb2a_hash(word, dictionary->dict_size, collisions);
+        index = djb2_hash(word, collisions);
         item = dictionary->dict_items[index];
         collisions++;
     }
@@ -420,7 +420,7 @@ int read_from_stdin(void) {
 
     // Allocate some memory for an array to put the chars in.
     size_t size_search_pattern = 1024;
-    char *search_pattern = calloc(size_search_pattern, 1);
+    unsigned char *search_pattern = malloc(size_search_pattern);
 
     // Break if memory allocation fails.
     if (search_pattern == NULL) {
@@ -434,7 +434,7 @@ int read_from_stdin(void) {
     size_t len = 0;
     bool word_started = false;
     bool last_word = false;
-    bool word_is_capital = false;
+    bool word_starts_uppercase = false;
 
     // Read char by char until you get to the end of the file.
     c = getc(stdin);
@@ -454,9 +454,9 @@ int read_from_stdin(void) {
 
     while (true) {
         // Did we read a legal character? If not, we can break and check if feof() == 0.
-        if ((c != 10) && ((c < 32) || (c > 126))) {
+        if ((c != '\n') && ((c < ' ') || (c > '~'))) {
             // But print the last word of the file first.
-            if (strlen(search_pattern) > 0)
+            if (strlen((const char *) search_pattern) > 0)
                 last_word = true;
             else
                 break;
@@ -464,7 +464,7 @@ int read_from_stdin(void) {
 
         // Resize the array if the input becomes to big by factor two.
         if (len == size_search_pattern) {
-            char *tmp = realloc(search_pattern, size_search_pattern *= 2);
+            unsigned char *tmp = realloc(search_pattern, size_search_pattern *= 2);
             // Break if reallocation fails.
             if (!tmp) {
                 fprintf(stderr, "Error: could not read form stdin - out of memory!\n");
@@ -488,34 +488,25 @@ int read_from_stdin(void) {
                 search_pattern[len] = '\0';
 
                 // Check if first char is capitalized.
-                if (is_capital(search_pattern[0]))
-                    word_is_capital = true;
+                if (is_uppercase(search_pattern[0]))
+                    word_starts_uppercase = true;
 
                 // Make a copy of the search pattern string to turn it to small letters.
-                char *lookup_copy = malloc(strlen(search_pattern) + 1);
+                unsigned char *lookup_copy = malloc(strlen((const char *) search_pattern) + 1);
                 if (lookup_copy == NULL) {
                     fprintf(stderr, "Error: could not start to read form stdin - out of memory!\n");
                     free(search_pattern);
                     delete_ht_dictionary();
                     exit(2);
                 }
-                memcpy(lookup_copy, search_pattern, strlen(search_pattern) + 1);
+                memcpy(lookup_copy, search_pattern, strlen((const char *) search_pattern) + 1);
 
-                // Make chars small (beginning from last char).
-                size_t current_char = strlen(lookup_copy);
-                // Array starts at 0, so f.e. if strlen() = 6, we have to start at 5.
-                current_char--;
-                do {
-                    if (is_capital(lookup_copy[current_char]))
-                        lookup_copy[current_char] = (char) (lookup_copy[current_char] + 32);
-
-                    // This is a bit tricky: first, evaluate current_char, then decrease it.
-                    // This way it can be assured the 0th position of the array will be checked
-                    // and modified, too.
-                } while (current_char-- != 0);
+                // Make chars lowercase.
+                for (size_t i = 0; lookup_copy[i] != '\0'; i++)
+                        lookup_copy[i] = lookup_copy[i] | 32u;
 
                 // Create a pointer to our translation.
-                char *tmp = search_in_ht_dictionary(lookup_copy);
+                unsigned char *tmp = search_in_ht_dictionary(lookup_copy);
 
                 // Print the original search pattern if it is not found in the dictionary and set
                 // the return value to 1.
@@ -525,11 +516,11 @@ int read_from_stdin(void) {
                 } else {
                     // If the search pattern is found and a translation returned we maybe need to
                     // capitalize the first letter for output.
-                    if (word_is_capital) {
+                    if (word_starts_uppercase) {
                         // Make a copy of the translation returned from the dictionary.
-                        // This is necessary because we have to change the first letter and dont want
+                        // This is necessary because we have to change the first letter and don't want
                         // to change it in the dictionary, too.
-                        char *translation = malloc(strlen(tmp) + 1);
+                        unsigned char *translation = malloc(strlen((const char *) tmp) + 1);
                         if (translation == NULL) {
                             fprintf(stderr, "Error: could not start to read form stdin - out of memory!\n");
                             free(lookup_copy);
@@ -537,27 +528,28 @@ int read_from_stdin(void) {
                             delete_ht_dictionary();
                             exit(2);
                         }
-                        memcpy(translation, tmp, strlen(tmp) + 1);
+                        memcpy(translation, tmp, strlen((const char *) tmp) + 1);
 
-                        translation[0] = (char) (translation[0] - 32);
+                        // Make the first letter uppercase.
+                        translation[0] = translation[0] & ~32u;
 
                         // Print the capitalized translation.
                         fprintf(stdout, "%s", translation);
                         free(translation);
                     } else
-                        // Print the non capitalized translation.
+                        // Print the lowercase translation.
                         fprintf(stdout, "%s", tmp);
                 }
 
                 // Clear memory for the search pattern copy.
                 free(lookup_copy);
                 // Reset the read-in array to zeros.
-                memset(search_pattern, '\0', strlen(search_pattern) + 1);
+                search_pattern[0] = '\0';
 
                 // Reset word variables.
                 len = 0;
                 word_started = false;
-                word_is_capital = false;
+                word_starts_uppercase = false;
 
                 // Print characters after current word without changing.
                 if (!last_word)
@@ -588,11 +580,11 @@ int read_from_stdin(void) {
     return ret;
 }
 
-// Helper functions to check if a character is capitalized or a letter.
-bool is_capital(int input) {
-    return (((input >= 65) && (input <= 90)));
+/* Helper functions to check if a character is capitalized or a letter. */
+bool is_uppercase(int input) {
+    return (((input >= 'A') && (input <= 'Z')));
 }
 
 bool is_letter(int input) {
-    return (((input >= 65) && (input <= 90)) || ((input >= 97 && input <= 122)));
+    return (((input >= 'A') && (input <= 'Z')) || ((input >= 'a' && input <= 'z')));
 }
